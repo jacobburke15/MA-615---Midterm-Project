@@ -1,0 +1,304 @@
+---
+title: "Midterm Project - Hawaiin Survey Data"
+author: "Jacob Burke"
+date: "19/10/2019"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+options(knitr.table.format = "html")
+library(tidyverse)
+library(asciiSetupReader)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(magrittr)
+library(tidyverse)
+library(esquisse)  
+```
+
+## Data Set
+
+- For this project, we are using the Hawaiin Health Survey data. 
+- Our 'modeling team' wanted a tidy data set to use for logistic regression, to analyze the observed risks 
+  of being diagnosed with diabetes, in relation to a number of different predictors 
+
+## Steps Taken
+
+The steps taken to prepare this data for analysis was as follows:  
+1. Access raw survey data file  
+2. Ensure data was of sufficient volume and uniqueness  
+3. Extract variables of interest (diabetes and predictors)  
+4. Clean these multiple data subsets  
+5. Bring subsets together to form new Tidy data set  
+6. EDA on Tidy data, preparing for further statisical analysis & modeling 
+
+## Data Volume & Uniqueness Check 
+
+- Once the raw data was extracted, counts of NA values for each 
+  variable, as well as uniqueness of responses were needed to determine 
+  what variables were sufficient for analysis.   
+- Data generated (preview subset): 
+
+```{r, echo = F}
+
+hawaii <- read_ascii_setup("samadult.dat", "SAMADULT.sps")
+
+hawaii <- as_tibble(hawaii)
+
+hawaiiNA <- NA
+
+for(i in 1:488)
+{
+ hawaiiNA <- rbind(hawaiiNA, sum(is.na(hawaii[ , i])))
+}
+
+hawaii_unique <- NA 
+
+for(i in 1:488){
+  hawaii_unique <- rbind(hawaii_unique, length(t(unique(hawaii[,i]))))
+}
+
+
+hawaii_answers <- cbind(hawaiiNA, hawaii_unique)
+colnames(hawaii_answers) <- c("NACount", "UniqueAnswers")
+
+## frequency table 
+hawaii_answers <- hawaii_answers[2:489, ]
+
+hawaii_answers <- t(hawaii_answers)
+```
+
+```{r answers, echo = F}
+print(head(t(hawaii_answers)))
+
+```
+
+## Extracting Variables 
+
+Variables of interest for this analysis were as follows:  
+  
+- Outcome: Diabetes (binary (0,1))  
+- Predictor: Height(in) (categorical)  
+- Predictor: Weight(lbs) (categorical)  
+- Predictor: BMI (categorical)  
+- Predictor: Alcohol Consumption (categorical)  
+- Predictor: Sick Days Taken Annually (categorical)  
+- Predictor: Sleep Hours per Night (categorical)  
+- Predictor: Joint Pain (binary(1,2))
+
+## Cleaning the data 
+
+The different aspects required to clean these extracted variables were as follows:  
+  
+- Recode missing values from each variable (eg: 997, 998, 999, etc.) to NA's 
+- Recode the diabetes variable categorization to a binary set of (0,1)
+  (assumptions that were made are documented in the report)  
+- Settle any other abnormalities in the predictors variable data (documented in report)  
+- Rename column variable names for easier interpretation  
+- Remove all final observation rows containing any NA values 
+
+## Tidy Data
+
+From here, we generated a new clean data set as shown: (header preview)  
+
+```{r, echo = F}
+diabetes <- hawaii[, 47]
+
+colnames(diabetes) <- "Diabetes"
+
+diabetes[diabetes == 2] <- 0
+diabetes[diabetes == 3] <- 1
+diabetes[diabetes == 7] <- NA
+diabetes[diabetes == 9] <- 0
+
+## Physical attributes 
+
+physical <- hawaii[, 315:317]
+
+physical <- as_tibble(physical)
+
+## Renaming columns 
+
+colnames(physical) <- c("Height_(in)", "Weight_(lbs)", "BMI")
+
+## Setting NA values to 96, 97, 98, 99 values entered in height (these were either refused answers, or not certain on height)
+
+physical$`Height_(in)`[physical$`Height_(in)` == 96 | physical$`Height_(in)` ==97 
+                      | physical$`Height_(in)`== 98
+                      | physical$`Height_(in)` ==99] <- NA
+
+## Setting unanswered Weight values to NA 
+
+physical$`Weight_(lbs)`[physical$`Weight_(lbs)` == 996 | physical$`Weight_(lbs)` ==997 
+                      | physical$`Weight_(lbs)` == 998
+                      | physical$`Weight_(lbs)` ==999] <- NA
+
+## Setting unanswered BMI Values to NA 
+
+physical$BMI[physical$BMI == 5] <- NA
+
+## 1) Alcohol 
+
+alcohol <- hawaii[,313]
+
+## setting unknown drinking category to NA 
+
+alcohol[alcohol == 10] <- NA
+alcohol <- as_tibble(alcohol)
+colnames(alcohol) <- "Alcohol_Consum"
+
+## 2) General Health 
+
+health <- hawaii[,224:226]
+
+## Looking at the health data, I've decided to use the "number of work days lost in the past 12 months" as the best overall proxy for general health. 
+
+health <- health[,1]
+colnames(health) <- ("Sick_Days_General")
+health[health == 999] <- NA 
+
+## 3) Sleep 
+
+sleep <- hawaii[,472:476]
+## Looking at the sleep data, "Hours of sleep" will be the survey question I'm choosing as my sleeping habits proxy for these individuals
+
+
+sleep <- sleep[,1]
+colnames(sleep) <- ("Hours_Sleep_Night")
+sleep[sleep == 97 | sleep == 98 | sleep == 99] <- NA
+
+## 4) Joint pain 
+
+joint <- hawaii[, 58:78]
+
+## Looking at this section, "joint pain last 30 days" will be the variable subset I'll use as my joint pain proxy 
+
+joint <- joint[,1]
+
+## cleaning values that were not answered, or did not know 
+
+joint[joint == 7 | joint == 9] <- NA
+colnames(joint) <- "Joint_Pain"
+
+data <- cbind(diabetes, physical, alcohol, health, sleep, joint)
+
+## To remove final NA values 
+
+data <- na.omit(data)
+
+```
+
+```{r, echo = F}
+## Tidy data (preview)
+
+print(head(data))
+
+```
+
+## EDA
+
+Once our tidy data set was generated, we then began to run EDA on diabetes data, to try and see what patterns or certain observations would arise.   
+
+We chose to run multiple histograms on a number of the predictor variables (excluding physical attributes height
+weight), to look at the distributions of survey response values for each. Since each predictor variable organized their data in a categorical sense, we will also show corresponding categorization tables to each visual. 
+
+## Alcohol
+
+```{r, echo = F}
+Number <- (1:9)
+
+Category <- c("Lifetime abstainer", "Former infrequent", 
+      "Former regular", 'Former, unknown frequency', 'Current infrequent', 'Current light',  'Current moderate', 'Current heavier', 'Current drinker, frequency/level unknown')
+
+alcohol_cat <- cbind(Category,Number)
+
+kable(alcohol_cat, format = "html", booktabs=TRUE, digits = 2, caption = 
+        "Alcohol Categorization") %>% kable_styling(font_size = 15)
+
+```
+## Alcohol {.smaller}
+
+```{r}
+ggplot() + geom_histogram(aes(x = data$Alcohol_Consum), binwidth = 1, color = 'black', fill = 'blue') + labs(x = "Alcohol Consumption Categorized (1-9)", y = "Frequency", title = "Alcohol Consumption")
+```
+- Here we essentially have a split between individuals who are former drinkers or abstainers, and a larger subset who are current drinkers, with most identifying on the 'light' side, while still a significant amount on the moderate-heavy side.
+
+## BMI
+
+```{r}
+
+Number <- (1:4)
+
+Category <- c('Underwieght', 'Healthy Weight', 'Overweight', 'Obese')
+
+BMI_cat <- cbind(Category,Number)
+
+kable(BMI_cat, digits = 2, format = "html", booktabs=TRUE, caption = "BMI Categorization") %>% kable_styling()
+
+```
+
+## BMI {.smaller}
+
+```{r}
+
+ggplot() + geom_histogram(aes(x = data$BMI), binwidth = 1, color = 'black', fill = 'red') + labs(x = "BMI", y = "Frequency", title = "BMI")
+
+```
+
+- From here we can see that there is a significant skew of these individuals either overweight, or obese. This could suggest we're looking at quite a few individuals in this data set with less than optimal health.
+
+## Count of Sick Days Taken per Year
+
+```{r}
+## Health
+
+Number <- (1:2)
+Number[1] <- "0-18"
+Number[2] <- "19"
+
+Category <- c('0-18 days', '19 or more days')
+
+Health_cat <- cbind(Category,Number)
+
+kable(Health_cat, digits = 2, format = "html", booktabs=TRUE, caption = "Sick Days Categorization") %>% kable_styling() 
+
+```
+
+## Count of Sick Days Taken per Year {.smaller}
+
+```{r}
+
+ggplot() + geom_histogram(aes(x = data$Sick_Days_General), binwidth = 1, color = 'black', fill = 'green') + labs(x = "Annual Number of Sick Days Taken", y = "Frequency", title = "Sick Days")
+```
+ - We can see that most individuals missed little to no time from work due to illnesses. There are a significant few between 2-5 sick days taken, and then a significant outlier subset of a few people who claim they missed more than 15 days. 
+
+## Sleep Hours per Night
+```{r}
+Number <- (1:3)
+
+Number[1] <- "3"
+Number[2] <- "4-11"
+Number[3] <- "12"
+
+Category <- c("1-3 hours", "4-11 hours", 
+      "12 or more hours")
+
+Sleep_cat <- cbind(Category,Number)
+
+kable(Sleep_cat, digits = 2, format = "html", booktabs=TRUE, caption = "Sleep Amounts Categorization") %>% kable_styling() 
+
+```
+
+## Sleep Hours per Night {.smaller}
+
+```{r}
+ggplot() + geom_histogram(aes(x = data$Hours_Sleep_Night), binwidth = 1, color = 'black', fill = 'yellow') + labs(x = "Average Hours of Sleep per Night", y = "Frequency", title = "Nightly Sleep Hours")
+```
+- From here, we can see that most average at just about 6 hours of sleep a night, with the majority of individuals hovering between 5-8 hours.
+
+## Concluding/Next Steps
+
+From here, the 'modeling team' can take this cleaned and explored data set to start analysis, with the main goal of creating a logistic regression model to analyze the risks of diabetes diagnosis.
+
